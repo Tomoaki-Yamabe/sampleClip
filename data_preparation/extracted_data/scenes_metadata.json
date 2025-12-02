@@ -1,0 +1,102 @@
+[
+  {
+    "scene_id": "scene-0001",
+    "description": "晴天の高速道路での走行。複数の車両が前方を走行中",
+    "location": "Boston, MA",
+    "image_path": "images\\scene-0001.jpg",
+    "metadata": {
+      "weather": "sunny",
+      "time": "day"
+    }
+  },
+  {
+    "scene_id": "scene-0002",
+    "description": "市街地の交差点での右折。歩行者が横断歩道を渡っている",
+    "location": "Singapore",
+    "image_path": "images\\scene-0002.jpg",
+    "metadata": {
+      "weather": "clear",
+      "time": "afternoon"
+    }
+  },
+  {
+    "scene_id": "scene-0003",
+    "description": "雨天時の交差点での停止。信号待ちの状態",
+    "location": "Boston, MA",
+    "image_path": "images\\scene-0003.jpg",
+    "metadata": {
+      "weather": "rainy",
+      "time": "evening"
+    }
+  },
+  {
+    "scene_id": "scene-0004",
+    "description": "夜間の住宅街での走行。街灯が点灯している",
+    "location": "Singapore",
+    "image_path": "images\\scene-0004.jpg",
+    "metadata": {
+      "weather": "clear",
+      "time": "night"
+    }
+  },
+  {
+    "scene_id": "scene-0005",
+    "description": "駐車場での低速走行。複数の駐車車両が周囲にある",
+    "location": "Boston, MA",
+    "image_path": "images\\scene-0005.jpg",
+    "metadata": {
+      "weather": "cloudy",
+      "time": "day"
+    }
+  },
+  {
+    "scene_id": "scene-0006",
+    "description": "高速道路の合流地点。車両が左側から合流してくる",
+    "location": "Singapore",
+    "image_path": "images\\scene-0006.jpg",
+    "metadata": {
+      "weather": "sunny",
+      "time": "morning"
+    }
+  },
+  {
+    "scene_id": "scene-0007",
+    "description": "市街地の一方通行路。両側に駐車車両が並んでいる",
+    "location": "Boston, MA",
+    "image_path": "images\\scene-0007.jpg",
+    "metadata": {
+      "weather": "clear",
+      "time": "afternoon"
+    }
+  },
+  {
+    "scene_id": "scene-0008",
+    "description": "トンネル内での走行。照明が暗い環境",
+    "location": "Singapore",
+    "image_path": "images\\scene-0008.jpg",
+    "metadata": {
+      "weather": "clear",
+      "time": "day"
+    }
+  },
+  {
+    "scene_id": "scene-0009",
+    "description": "曇天の郊外道路。前方に大型トラックが走行中",
+    "location": "Boston, MA",
+    "image_path": "images\\scene-0009.jpg",
+    "metadata": {
+      "weather": "cloudy",
+      "time": "afternoon"
+    }
+  },
+  {
+    "scene_id": "scene-0010",
+    "description": "市街地の信号交差点。複数の車両と自転車が混在",
+    "location": "Singapore",
+    "image_path": "images\\scene-0010.jpg",
+    "metadata": {
+      "weather": "sunny",
+      "time": "day"
+    }
+  }
+]

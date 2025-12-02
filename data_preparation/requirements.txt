@@ -1,0 +1,6 @@
+pillow
+numpy
+torch
+torchvision
+transformers
+umap-learn
