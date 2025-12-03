@@ -1,0 +1,118 @@
+import { SearchResponse, ErrorResponse } from '@/types';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+export class APIError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number
+  ) {
+    super(message);
+    this.name = 'APIError';
+  }
+}
+
+/**
+ * テキストクエリによるシーン検索
+ */
+export async function searchByText(
+  query: string,
+  topK: number = 5
+): Promise<SearchResponse> {
+  try {
+    const formData = new FormData();
+    formData.append('query', query);
+    formData.append('top_k', topK.toString());
+
+    const response = await fetch(`${API_URL}/predict/text`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData: ErrorResponse = await response.json().catch(() => ({
+        error: 'Unknown Error',
+        message: 'An unexpected error occurred',
+        code: 'UNKNOWN_ERROR',
+      }));
+
+      throw new APIError(
+        errorData.message || 'Failed to search by text',
+        errorData.code || 'SEARCH_ERROR',
+        response.status
+      );
+    }
+
+    const data: SearchResponse = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+
+    // Network or other errors
+    throw new APIError(
+      'Network error: Unable to connect to the server',
+      'NETWORK_ERROR',
+      0
+    );
+  }
+}
+
+/**
+ * 画像アップロードによるシーン検索
+ */
+export async function searchByImage(
+  imageFile: File,
+  topK: number = 5
+): Promise<SearchResponse> {
+  try {
+    // ファイルサイズチェック (5MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (imageFile.size > MAX_FILE_SIZE) {
+      throw new APIError(
+        'Image file size must be less than 5MB',
+        'FILE_SIZE_EXCEEDED',
+        400
+      );
+    }
+
+    const formData = new FormData();
+    formData.append('file', imageFile);
+    formData.append('top_k', topK.toString());
+
+    const response = await fetch(`${API_URL}/predict/image`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData: ErrorResponse = await response.json().catch(() => ({
+        error: 'Unknown Error',
+        message: 'An unexpected error occurred',
+        code: 'UNKNOWN_ERROR',
+      }));
+
+      throw new APIError(
+        errorData.message || 'Failed to search by image',
+        errorData.code || 'SEARCH_ERROR',
+        response.status
+      );
+    }
+
+    const data: SearchResponse = await response.json();
+    return data;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+
+    // Network or other errors
+    throw new APIError(
+      'Network error: Unable to connect to the server',
+      'NETWORK_ERROR',
+      0
+    );
+  }
+}
