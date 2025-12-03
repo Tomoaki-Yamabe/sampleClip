@@ -17,7 +17,7 @@ from PIL import Image
 import numpy as np
 
 from encoders import TextEncoder, ImageEncoder, load_model_from_s3
-from vector_db import VectorDatabase, load_vector_db_from_s3, load_vector_db_from_file
+from vector_db import VectorDatabase, create_vector_db
 from exceptions import (
     APIException,
     ValidationError,
@@ -79,6 +79,13 @@ DATA_BUCKET = os.getenv("DATA_BUCKET", "")
 VECTOR_DB_KEY = os.getenv("VECTOR_DB_KEY", "vector_db.json")
 TEXT_MODEL_KEY = os.getenv("TEXT_MODEL_KEY", "models/text_projector.pt")
 IMAGE_MODEL_KEY = os.getenv("IMAGE_MODEL_KEY", "models/image_projector.pt")
+
+# S3 Vectors configuration
+USE_S3_VECTORS = os.getenv("USE_S3_VECTORS", "false").lower() == "true"
+VECTOR_BUCKET_NAME = os.getenv("VECTOR_BUCKET_NAME", "mcap-search-vectors")
+TEXT_INDEX_NAME = os.getenv("TEXT_INDEX_NAME", "scene-text-embeddings")
+IMAGE_INDEX_NAME = os.getenv("IMAGE_INDEX_NAME", "scene-image-embeddings")
+METADATA_KEY = os.getenv("METADATA_KEY", "metadata/scenes_metadata.json")
 
 # FastAPI application
 app = FastAPI(
@@ -205,15 +212,20 @@ def initialize_models():
         logger.info("Models already initialized")
         return
     
-    logger.info("Initializing models and database...")
+    logger.info(f"Initializing models and database (USE_S3_VECTORS={USE_S3_VECTORS})...")
     
     try:
-        # Load vector database
-        if DATA_BUCKET:
-            vector_db = load_vector_db_from_s3(DATA_BUCKET, VECTOR_DB_KEY)
-        else:
-            # For local testing
-            vector_db = load_vector_db_from_file("vector_db.json")
+        # Load vector database with automatic backend selection
+        vector_db = create_vector_db(
+            use_s3_vectors=USE_S3_VECTORS,
+            data_bucket=DATA_BUCKET,
+            vector_db_key=VECTOR_DB_KEY,
+            vector_bucket_name=VECTOR_BUCKET_NAME,
+            text_index_name=TEXT_INDEX_NAME,
+            image_index_name=IMAGE_INDEX_NAME,
+            metadata_key=METADATA_KEY
+        )
+        logger.info(f"Vector database initialized with backend: {vector_db.backend.value}")
         
         # Load text encoder
         if DATA_BUCKET:
@@ -249,13 +261,21 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    total_scenes = 0
+    if vector_db:
+        if hasattr(vector_db, 'total_scenes'):
+            total_scenes = vector_db.total_scenes
+        elif hasattr(vector_db, 'metadata_cache'):
+            total_scenes = len(vector_db.metadata_cache)
+    
     return {
         "status": "healthy",
         "service": "nuScenes Multimodal Search API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "models_loaded": text_encoder is not None and image_encoder is not None,
         "database_loaded": vector_db is not None,
-        "total_scenes": vector_db.total_scenes if vector_db else 0
+        "database_type": "S3 Vectors" if USE_S3_VECTORS else "JSON",
+        "total_scenes": total_scenes
     }
 
 

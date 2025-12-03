@@ -44,12 +44,32 @@ export class NuScenesSearchStack extends cdk.Stack {
         VECTOR_DB_KEY: 'vector_db.json',
         TEXT_MODEL_KEY: 'models/text_projector.pt',
         IMAGE_MODEL_KEY: 'models/image_projector.pt',
+        // S3 Vectors configuration (set USE_S3_VECTORS=true to enable)
+        USE_S3_VECTORS: 'false',  // Change to 'true' when S3 Vectors is available
+        VECTOR_BUCKET_NAME: 'mcap-search-vectors',
+        TEXT_INDEX_NAME: 'scene-text-embeddings',
+        IMAGE_INDEX_NAME: 'scene-image-embeddings',
+        METADATA_KEY: 'metadata/scenes_metadata.json',
       },
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
     // S3読み取り権限を付与
     dataBucket.grantRead(searchFunction);
+    
+    // S3 Vectors権限を付与（USE_S3_VECTORS=trueの場合に必要）
+    // 注意: 現在の環境ではSCPによりS3 Vectorsアクセスが制限されている可能性があります
+    searchFunction.addToRolePolicy(new cdk.aws_iam.PolicyStatement({
+      effect: cdk.aws_iam.Effect.ALLOW,
+      actions: [
+        's3vectors:QueryVectors',
+        's3vectors:GetVectors',
+        's3vectors:ListVectors',
+      ],
+      resources: [
+        `arn:aws:s3vectors:${this.region}:${this.account}:bucket/mcap-search-vectors/*`,
+      ],
+    }));
 
     // ========================================
     // API Gateway HTTP API（コメントアウト）
