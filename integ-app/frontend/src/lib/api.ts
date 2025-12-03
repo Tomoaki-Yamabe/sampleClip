@@ -1,4 +1,4 @@
-import { SearchResponse, ErrorResponse } from '@/types';
+import { SearchResponse, ErrorResponse, SceneWithUMAP, UMAPPoint } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -115,4 +115,65 @@ export async function searchByImage(
       0
     );
   }
+}
+
+/**
+ * UMAP座標データをロード
+ * データはキャッシュされる
+ */
+let umapDataCache: UMAPPoint[] | null = null;
+
+export async function loadUMAPData(): Promise<UMAPPoint[]> {
+  // キャッシュがあれば返す
+  if (umapDataCache) {
+    return umapDataCache;
+  }
+
+  try {
+    // バックエンドAPIからベクトルDBデータを取得
+    // ベクトルDBにはUMAP座標が含まれている
+    const dataUrl = `${API_URL}/predict/vector_db`;
+    
+    const response = await fetch(dataUrl);
+    
+    if (!response.ok) {
+      throw new APIError(
+        'Failed to load UMAP data from backend',
+        'UMAP_LOAD_ERROR',
+        response.status
+      );
+    }
+
+    const scenesData: SceneWithUMAP[] = await response.json();
+    
+    // UMAPPointに変換
+    umapDataCache = scenesData.map(scene => ({
+      scene_id: scene.scene_id,
+      x: scene.umap_coords[0],
+      y: scene.umap_coords[1],
+      description: scene.description,
+      location: scene.location,
+      thumbnail_url: `${API_URL}/static/scenes/${scene.image_path.replace(/\\/g, '/')}`,
+      metadata: scene.metadata,
+    }));
+
+    return umapDataCache;
+  } catch (error) {
+    if (error instanceof APIError) {
+      throw error;
+    }
+
+    throw new APIError(
+      'Failed to load UMAP visualization data',
+      'UMAP_LOAD_ERROR',
+      0
+    );
+  }
+}
+
+/**
+ * UMAPデータキャッシュをクリア（テスト用）
+ */
+export function clearUMAPCache(): void {
+  umapDataCache = null;
 }

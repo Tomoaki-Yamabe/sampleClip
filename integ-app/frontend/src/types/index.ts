@@ -27,3 +27,31 @@ export interface ErrorResponse {
   message: string;
   code: string;
 }
+
+// UMAP Visualization Types
+export interface UMAPPoint {
+  scene_id: string;
+  x: number;              // UMAP X座標
+  y: number;              // UMAP Y座標
+  description: string;
+  location: string;
+  thumbnail_url: string;
+  metadata?: {
+    weather?: string;
+    time?: string;
+  };
+}
+
+export interface SceneWithUMAP {
+  scene_id: string;
+  description: string;
+  location: string;
+  image_path: string;
+  metadata: {
+    weather: string;
+    time: string;
+  };
+  text_embedding: number[];
+  image_embedding: number[];
+  umap_coords: [number, number];
+}
