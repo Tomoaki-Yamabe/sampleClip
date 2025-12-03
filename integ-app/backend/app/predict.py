@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 import numpy as np
 from fastapi import APIRouter, UploadFile, File, HTTPException, Form
@@ -18,6 +19,7 @@ MODEL_DIR = os.getenv("MODEL_DIR", "app/model")
 TEXT_PROJECTOR_PATH = os.path.join(MODEL_DIR, "text_projector.pt")
 IMAGE_PROJECTOR_PATH = os.path.join(MODEL_DIR, "image_projector.pt")
 VECTOR_DB_PATH = os.path.join(MODEL_DIR, "vector_db.json")
+UMAP_DATA_PATH = os.path.join(MODEL_DIR, "scenes_with_umap.json")
 
 # エンコーダーとベクトルDBの初期化
 text_encoder = TextEncoder(projector_path=TEXT_PROJECTOR_PATH, device=DEVICE)
@@ -77,5 +79,19 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = Form(5)):
                 for score, item in results
             ]
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vector_db")
+async def get_vector_db():
+    """UMAP座標を含むシーンデータを返す（UMAP可視化用）"""
+    try:
+        # UMAP座標を含むJSONファイルを直接読み込んで返す
+        with open(UMAP_DATA_PATH, 'r', encoding='utf-8') as f:
+            umap_data = json.load(f)
+        return umap_data
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="UMAP data file not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
