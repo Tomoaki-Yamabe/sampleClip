@@ -92,6 +92,12 @@ export default function Home() {
                 </p>
               </div>
             </div>
+            <a
+              href="/visualization"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all text-sm font-medium shadow-md hover:shadow-lg"
+            >
+              可視化を見る
+            </a>
           </div>
         </div>
       </header>
