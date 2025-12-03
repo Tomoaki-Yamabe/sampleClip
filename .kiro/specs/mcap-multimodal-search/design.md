@@ -7,14 +7,18 @@
 ### 主要機能
 - テキストベースのシーン検索
 - 画像ベースのシーン検索
-- 事前生成された埋め込みベクトルの利用
-- AWSサーバーレスデプロイ（Lambda + API Gateway + S3 + CloudFront）
+- S3 Vectors (GA) による高速ベクトル検索
+- AWSサーバーレスデプロイ（Lambda + API Gateway + S3 Vectors + CloudFront）
 
 ### 技術スタック
-- **バックエンド**: Python 3.11, FastAPI, PyTorch/ONNX
+- **バックエンド**: Python 3.11, FastAPI, PyTorch/ONNX, boto3 (S3 Vectors API)
 - **フロントエンド**: Next.js 15, React 19, Tailwind CSS
-- **インフラ**: AWS CDK (TypeScript), Lambda, API Gateway, S3, CloudFront
+- **インフラ**: AWS CDK (TypeScript), Lambda, API Gateway, S3 Vectors, CloudFront
 - **データ**: nuScenes Mini (10シーン)
+
+### アーキテクチャ変更履歴
+- **v1.0** (2024-12): S3 JSONベースのベクトルストレージ - メモリ内検索
+- **v2.0** (2025-01): S3 Vectors (GA) への移行 - マネージドベクトル検索、パフォーマンス向上
 
 ## アーキテクチャ
 
@@ -26,11 +30,13 @@ graph TB
     CF --> S3F[S3: Frontend Assets]
     CF --> APIG[API Gateway HTTP API]
     APIG --> Lambda[Lambda: Search API]
-    Lambda --> S3D[S3: Vector DB & Images]
+    Lambda --> S3V[S3 Vectors: Vector Index]
+    Lambda --> S3D[S3: Images & Models]
     Lambda --> CW[CloudWatch Logs]
     
     subgraph "事前準備（手動）"
         NS[nuScenes Mini] --> Prep[前処理スクリプト]
+        Prep --> S3V
         Prep --> S3D
     end
 ```
@@ -205,42 +211,95 @@ class ImageEncoder:
         return normalize(embedding)  # L2正規化
 ```
 
-### 4. ベクトルデータベース
+### 4. ベクトルデータベース（S3 Vectors）
 
-#### データ構造
+#### S3 Vectors統合
 ```python
 class VectorDatabase:
-    def __init__(self, data_path: str):
-        """S3からベクトルDBをロード"""
-        self.scenes = load_json(data_path)
+    def __init__(self, bucket_name: str, index_name: str):
+        """S3 Vectorsクライアントを初期化"""
+        self.s3_client = boto3.client('s3')
+        self.bucket_name = bucket_name
+        self.index_name = index_name
+        
+        # メタデータキャッシュ（シーン情報）
+        self.metadata_cache = self._load_metadata()
     
     def search(self, query_vec: np.ndarray, top_k: int = 5) -> List[SceneResult]:
-        """コサイン類似度検索"""
-        similarities = []
-        for scene in self.scenes:
-            sim = cosine_similarity(query_vec, scene['embedding'])
-            if sim >= 0.3:  # 閾値
-                similarities.append((sim, scene))
+        """S3 Vectors QueryVectors APIを使用した検索"""
+        response = self.s3_client.query_vectors(
+            Bucket=self.bucket_name,
+            IndexName=self.index_name,
+            QueryVector=query_vec.tolist(),
+            MaxResults=top_k,
+            MinSimilarity=0.3  # 類似度閾値
+        )
         
-        # 類似度でソート
-        similarities.sort(reverse=True, key=lambda x: x[0])
-        return similarities[:top_k]
+        # 結果をSceneResultに変換
+        results = []
+        for match in response['Matches']:
+            scene_id = match['VectorId']
+            similarity = match['Similarity']
+            metadata = self.metadata_cache.get(scene_id, {})
+            
+            results.append(SceneResult(
+                scene_id=scene_id,
+                image_url=metadata['image_url'],
+                description=metadata['description'],
+                location=metadata['location'],
+                similarity=similarity
+            ))
+        
+        return results
+    
+    def _load_metadata(self) -> Dict[str, Dict]:
+        """S3からシーンメタデータをロード"""
+        obj = self.s3_client.get_object(
+            Bucket=self.bucket_name,
+            Key='metadata/scenes_metadata.json'
+        )
+        return json.loads(obj['Body'].read())
 ```
 
-#### データフォーマット（JSON）
+#### S3 Vectorsデータ構造
+
+**Vector Index**: S3 Vectors管理下のベクトルインデックス
+- ベクトルID: `scene-0001`, `scene-0002`, ...
+- ベクトル次元: 384次元（テキスト）または256次元（画像）
+- 距離メトリック: コサイン類似度
+
+**メタデータファイル** (`metadata/scenes_metadata.json`):
 ```json
 {
-  "scenes": [
-    {
-      "scene_id": "scene-0001",
-      "description": "雨天時の交差点での右折シーン",
-      "location": "Boston, MA",
-      "image_path": "scenes/scene-0001.jpg",
-      "text_embedding": [0.123, -0.456, ...],  // 384次元
-      "image_embedding": [0.789, 0.234, ...],  // 256次元
-      "umap_coords": [12.34, -5.67]            // UMAP 2D座標
-    }
-  ]
+  "scene-0001": {
+    "description": "雨天時の交差点での右折シーン",
+    "location": "Boston, MA",
+    "image_url": "https://cdn.example.com/scenes/scene-0001.jpg",
+    "umap_coords": [12.34, -5.67]
+  }
+}
+```
+
+#### S3 Vectors API呼び出し例
+```python
+# QueryVectors API
+response = s3_client.query_vectors(
+    Bucket='mcap-search-vectors',
+    IndexName='scene-embeddings',
+    QueryVector=[0.123, -0.456, ...],  # 384次元
+    MaxResults=5,
+    MinSimilarity=0.3
+)
+
+# レスポンス形式
+{
+    'Matches': [
+        {
+            'VectorId': 'scene-0001',
+            'Similarity': 0.87
+        },
+        ...
+    ]
 }
 ```
 
