@@ -48,3 +48,13 @@ next-env.d.ts
 integ-app/data/*
 *.keras
 backup/*
+
+# CDK
+infrastructure/cdk/cdk.out/
+infrastructure/cdk/node_modules/
+
+# Specs and documentation (tracked separately)
+.kiro/specs/**/*.md
+
+# Kiro settings (personal configuration)
+.kiro/settings/
