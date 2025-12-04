@@ -2,10 +2,11 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as logs from 'aws-cdk-lib/aws-logs';
-// import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
-// import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-// import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-// import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
+import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
 
 export class NuScenesSearchStack extends cdk.Stack {
@@ -13,7 +14,7 @@ export class NuScenesSearchStack extends cdk.Stack {
     super(scope, id, props);
 
     // ========================================
-    // S3 Bucket: Raw Data Storage
+    // S3 Bucket: Data Storage (Models, Vector DB, Images)
     // ========================================
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       bucketName: `nuscenes-search-data-${this.account}`,
@@ -21,6 +22,28 @@ export class NuScenesSearchStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN, // 本番環境では保持
       autoDeleteObjects: false,
+      cors: [
+        {
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+          ],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+          maxAge: 3600,
+        },
+      ],
+    });
+
+    // ========================================
+    // S3 Bucket: Frontend Static Hosting
+    // ========================================
+    const frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
+      bucketName: `nuscenes-search-frontend-${this.account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // ========================================
@@ -59,8 +82,8 @@ export class NuScenesSearchStack extends cdk.Stack {
     
     // S3 Vectors権限を付与（USE_S3_VECTORS=trueの場合に必要）
     // 注意: 現在の環境ではSCPによりS3 Vectorsアクセスが制限されている可能性があります
-    searchFunction.addToRolePolicy(new cdk.aws_iam.PolicyStatement({
-      effect: cdk.aws_iam.Effect.ALLOW,
+    searchFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
       actions: [
         's3vectors:QueryVectors',
         's3vectors:GetVectors',
@@ -72,92 +95,89 @@ export class NuScenesSearchStack extends cdk.Stack {
     }));
 
     // ========================================
-    // API Gateway HTTP API（コメントアウト）
+    // API Gateway HTTP API
     // ========================================
-    // 注意: API Gatewayが制限されている環境では、Lambda Function URLを使用してください
-    // 
-    // const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
-    //   apiName: 'nuscenes-search-api',
-    //   description: 'nuScenes Multimodal Search API',
-    //   corsPreflight: {
-    //     allowOrigins: ['*'],
-    //     allowMethods: [
-    //       apigateway.CorsHttpMethod.GET,
-    //       apigateway.CorsHttpMethod.POST,
-    //       apigateway.CorsHttpMethod.OPTIONS,
-    //     ],
-    //     allowHeaders: ['Content-Type', 'Authorization'],
-    //     maxAge: cdk.Duration.hours(1),
-    //   },
-    // });
-    //
-    // // Lambda統合
-    // const lambdaIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
-    //   'LambdaIntegration',
-    //   searchFunction
-    // );
-    //
-    // // ルート設定
-    // httpApi.addRoutes({
-    //   path: '/{proxy+}',
-    //   methods: [apigateway.HttpMethod.ANY],
-    //   integration: lambdaIntegration,
-    // });
+    const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
+      apiName: 'nuscenes-search-api',
+      description: 'nuScenes Multimodal Search API',
+      corsPreflight: {
+        allowOrigins: ['*'],
+        allowMethods: [
+          apigateway.CorsHttpMethod.GET,
+          apigateway.CorsHttpMethod.POST,
+          apigateway.CorsHttpMethod.OPTIONS,
+        ],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        maxAge: cdk.Duration.hours(1),
+      },
+    });
+
+    // Lambda統合
+    const lambdaIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
+      'LambdaIntegration',
+      searchFunction
+    );
+
+    // ルート設定 - /search/text
+    httpApi.addRoutes({
+      path: '/search/text',
+      methods: [apigateway.HttpMethod.POST],
+      integration: lambdaIntegration,
+    });
+
+    // ルート設定 - /search/image
+    httpApi.addRoutes({
+      path: '/search/image',
+      methods: [apigateway.HttpMethod.POST],
+      integration: lambdaIntegration,
+    });
 
     // ========================================
-    // Lambda Function URL（API Gatewayの代替）
+    // CloudFront Distribution
     // ========================================
-    // 注意: 現在の環境ではSCPによりLambda Function URLの作成が制限されています
-    // 本番環境では以下のコメントを解除してください
-    // const functionUrl = searchFunction.addFunctionUrl({
-    //   authType: lambda.FunctionUrlAuthType.NONE,
-    //   cors: {
-    //     allowedOrigins: ['*'],
-    //     allowedMethods: [lambda.HttpMethod.ALL],
-    //     allowedHeaders: ['*'],
-    //     maxAge: cdk.Duration.hours(1),
-    //   },
-    // });
+    // Origin Access Identity for S3
+    const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'OAI', {
+      comment: 'OAI for nuScenes Search Frontend',
+    });
 
-    // ========================================
-    // S3 Bucket: フロントエンド静的ホスティング（オプション）
-    // ========================================
-    // 注意: 本番環境では有効化してください
-    // const frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
-    //   bucketName: `nuscenes-search-frontend-${this.account}`,
-    //   encryption: s3.BucketEncryption.S3_MANAGED,
-    //   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
-    //   autoDeleteObjects: true,
-    // });
+    // Grant CloudFront read access to frontend bucket
+    frontendBucket.grantRead(originAccessIdentity);
 
-    // ========================================
-    // CloudFront Distribution（オプション）
-    // ========================================
-    // 注意: CloudFrontへのアクセスが制限されている環境ではコメントアウト
-    // 本番環境では有効化してください
-    // const distribution = new cloudfront.Distribution(this, 'Distribution', {
-    //   comment: 'nuScenes Search Frontend',
-    //   defaultBehavior: {
-    //     origin: new origins.S3Origin(frontendBucket),
-    //     viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-    //     cachePolicy: new cloudfront.CachePolicy(this, 'FrontendCachePolicy', {
-    //       defaultTtl: cdk.Duration.hours(24),
-    //       maxTtl: cdk.Duration.days(7),
-    //       minTtl: cdk.Duration.seconds(0),
-    //       queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
-    //     }),
-    //   },
-    //   defaultRootObject: 'index.html',
-    //   errorResponses: [
-    //     {
-    //       httpStatus: 404,
-    //       responseHttpStatus: 200,
-    //       responsePagePath: '/index.html',
-    //       ttl: cdk.Duration.minutes(5),
-    //     },
-    //   ],
-    // });
+    // CloudFront Distribution
+    const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      comment: 'nuScenes Search Frontend',
+      defaultBehavior: {
+        origin: new origins.S3Origin(frontendBucket, {
+          originAccessIdentity: originAccessIdentity,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: new cloudfront.CachePolicy(this, 'FrontendCachePolicy', {
+          defaultTtl: cdk.Duration.hours(24),
+          maxTtl: cdk.Duration.days(7),
+          minTtl: cdk.Duration.seconds(0),
+          queryStringBehavior: cloudfront.CacheQueryStringBehavior.none(),
+        }),
+      },
+      additionalBehaviors: {
+        '/api/*': {
+          origin: new origins.HttpOrigin(
+            `${httpApi.httpApiId}.execute-api.${this.region}.amazonaws.com`
+          ),
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        },
+      },
+      defaultRootObject: 'index.html',
+      errorResponses: [
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: '/index.html',
+          ttl: cdk.Duration.minutes(5),
+        },
+      ],
+    });
 
     // ========================================
     // Outputs
@@ -168,10 +188,15 @@ export class NuScenesSearchStack extends cdk.Stack {
       exportName: 'NuScenesSearchDataBucket',
     });
 
+    new cdk.CfnOutput(this, 'FrontendBucketName', {
+      value: frontendBucket.bucketName,
+      description: 'S3 bucket for frontend static assets',
+      exportName: 'NuScenesSearchFrontendBucket',
+    });
 
     new cdk.CfnOutput(this, 'FunctionName', {
       value: searchFunction.functionName,
-      description: 'Lambda Function Name (invoke directly using AWS CLI or SDK)',
+      description: 'Lambda Function Name',
       exportName: 'NuScenesSearchFunctionName',
     });
 
@@ -181,31 +206,22 @@ export class NuScenesSearchStack extends cdk.Stack {
       exportName: 'NuScenesSearchFunctionArn',
     });
 
-    // Lambda Function URL（現在の環境では制限されています）
-    // new cdk.CfnOutput(this, 'FunctionUrl', {
-    //   value: functionUrl.url,
-    //   description: 'Lambda Function URL',
-    //   exportName: 'NuScenesSearchFunctionUrl',
-    // });
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: httpApi.url!,
+      description: 'API Gateway URL',
+      exportName: 'NuScenesSearchApiUrl',
+    });
 
-    // API Gateway使用時のみ有効化
-    // new cdk.CfnOutput(this, 'ApiUrl', {
-    //   value: httpApi.url!,
-    //   description: 'API Gateway URL',
-    //   exportName: 'NuScenesSearchApiUrl',
-    // });
+    new cdk.CfnOutput(this, 'DistributionUrl', {
+      value: `https://${distribution.distributionDomainName}`,
+      description: 'CloudFront Distribution URL',
+      exportName: 'NuScenesSearchDistributionUrl',
+    });
 
-    // CloudFront有効時のみ使用
-    // new cdk.CfnOutput(this, 'DistributionUrl', {
-    //   value: `https://${distribution.distributionDomainName}`,
-    //   description: 'CloudFront Distribution URL',
-    //   exportName: 'NuScenesSearchDistributionUrl',
-    // });
-
-    // new cdk.CfnOutput(this, 'DistributionId', {
-    //   value: distribution.distributionId,
-    //   description: 'CloudFront Distribution ID',
-    //   exportName: 'NuScenesSearchDistributionId',
-    // });
+    new cdk.CfnOutput(this, 'DistributionId', {
+      value: distribution.distributionId,
+      description: 'CloudFront Distribution ID',
+      exportName: 'NuScenesSearchDistributionId',
+    });
   }
 }
