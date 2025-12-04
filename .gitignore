@@ -1,60 +1,78 @@
-*/.venv/*
-Section13/static/images/*
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
 
-#---------------
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# dependencies
-*node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-*/frontend/*.next/*
-/out/
-
-# production
-/build
-
-# misc
+# OS
 .DS_Store
-*.pem
+Thumbs.db
 
-# debug
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*credentials*
+*secrets*
+
+# Node
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-integ-app/data/*
-*.keras
-backup/*
+.next/
+out/
 
 # CDK
-infrastructure/cdk/cdk.out/
-infrastructure/cdk/node_modules/
+cdk.out/
+*.js
+*.d.ts
+!jest.config.js
 
-# Specs and documentation (tracked separately)
-.kiro/specs/**/*.md
+# Data
+*.db
+*.sqlite
+*.sqlite3
 
-# Kiro settings (personal configuration)
-.kiro/settings/
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Security - 機密情報を含む可能性のあるファイル
+EMERGENCY_STEPS.md
+SECURITY_CLEANUP_REPORT.md
