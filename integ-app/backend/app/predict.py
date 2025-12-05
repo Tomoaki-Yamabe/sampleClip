@@ -34,8 +34,23 @@ router = APIRouter(prefix="/predict", tags=["Prediction"])
 
 def convert_to_api_url(path: str) -> str:
     """ローカルパスをAPIのURL形式に変換"""
-    # ./meme/... -> /static/memes/...
-    return path.replace("./meme/", "/static/")
+    # Windowsのバックスラッシュをスラッシュに変換
+    path = path.replace("\\", "/")
+    
+    # 相対パスを絶対パスに変換
+    if path.startswith("./"):
+        path = path[2:]
+    
+    # images/... -> /static/scenes/...
+    if path.startswith("images/"):
+        return "/static/scenes/" + path[7:]
+    
+    # 旧形式のサポート: ./meme/... -> /static/...
+    if path.startswith("meme/"):
+        return "/static/" + path[5:]
+    
+    # デフォルト: そのまま/staticを前置
+    return "/static/scenes/" + path
 
 @router.post("/text")
 async def search_by_text(query: str = Form(...), top_k: int = Form(5)):
@@ -48,8 +63,10 @@ async def search_by_text(query: str = Form(...), top_k: int = Form(5)):
             "query": query,
             "results": [
                 {
+                    "scene_id": item.get("scene_id", "unknown"),
                     "image_url": convert_to_api_url(item["image_path"]),
-                    "caption": item.get("text", ""),
+                    "description": item.get("text", ""),
+                    "location": item.get("location", "Unknown"),
                     "similarity": round(float(score), 4)
                 }
                 for score, item in results
@@ -72,8 +89,10 @@ async def search_by_image(file: UploadFile = File(...), top_k: int = Form(5)):
         return {
             "results": [
                 {
+                    "scene_id": item.get("scene_id", "unknown"),
                     "image_url": convert_to_api_url(item["image_path"]),
-                    "caption": item.get("text", ""),
+                    "description": item.get("text", ""),
+                    "location": item.get("location", "Unknown"),
                     "similarity": round(float(score), 4)
                 }
                 for score, item in results
@@ -90,7 +109,28 @@ async def get_vector_db():
         # UMAP座標を含むJSONファイルを直接読み込んで返す
         with open(UMAP_DATA_PATH, 'r', encoding='utf-8') as f:
             umap_data = json.load(f)
-        return umap_data
+        
+        # APIのベースURL（環境変数から取得、デフォルトはlocalhost:8000）
+        api_base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+        
+        # フロントエンドが期待する形式に変換
+        formatted_data = []
+        for scene in umap_data:
+            # 完全なURLを生成（APIベースURL + 相対パス）
+            relative_url = convert_to_api_url(scene["image_path"])
+            full_url = f"{api_base_url}{relative_url}"
+            
+            formatted_data.append({
+                "scene_id": scene["scene_id"],
+                "x": scene["umap_coords"][0],
+                "y": scene["umap_coords"][1],
+                "description": scene["description"],
+                "location": scene["location"],
+                "thumbnail_url": full_url,
+                "metadata": scene.get("metadata", {})
+            })
+        
+        return formatted_data
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="UMAP data file not found")
     except Exception as e:

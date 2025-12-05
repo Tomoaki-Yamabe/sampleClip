@@ -48,6 +48,44 @@ class SimpleVectorDB:
 
 
 def load_vector_db(path: str) -> SimpleVectorDB:
+    """
+    JSONファイルからベクトルDBをロード
+    
+    Args:
+        path: JSONファイルのパス
+        
+    Returns:
+        SimpleVectorDB: ロードされたベクトルDB
+    """
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
+    
+    # 新しい形式: {"version": "1.0", "scenes": [...]}
+    if isinstance(data, dict) and 'scenes' in data:
+        scenes = data['scenes']
+        items = []
+        for scene in scenes:
+            # テキスト埋め込み
+            if 'text_embedding' in scene:
+                items.append({
+                    'vec': scene['text_embedding'],
+                    'type': 'text',
+                    'scene_id': scene['scene_id'],
+                    'text': scene.get('description', ''),
+                    'image_path': scene.get('image_path', '')
+                })
+            
+            # 画像埋め込み
+            if 'image_embedding' in scene:
+                items.append({
+                    'vec': scene['image_embedding'],
+                    'type': 'image', 
+                    'scene_id': scene['scene_id'],
+                    'text': scene.get('description', ''),
+                    'image_path': scene.get('image_path', '')
+                })
+        
+        return SimpleVectorDB.from_json(items)
+    
+    # データがリスト形式の場合（従来の形式）
     return SimpleVectorDB.from_json(data)

@@ -131,7 +131,7 @@ export async function loadUMAPData(): Promise<UMAPPoint[]> {
 
   try {
     // バックエンドAPIからベクトルDBデータを取得
-    // ベクトルDBにはUMAP座標が含まれている
+    // バックエンドは既にUMAPPoint形式で返している
     const dataUrl = `${API_URL}/predict/vector_db`;
     
     const response = await fetch(dataUrl);
@@ -144,18 +144,8 @@ export async function loadUMAPData(): Promise<UMAPPoint[]> {
       );
     }
 
-    const scenesData: SceneWithUMAP[] = await response.json();
-    
-    // UMAPPointに変換
-    umapDataCache = scenesData.map(scene => ({
-      scene_id: scene.scene_id,
-      x: scene.umap_coords[0],
-      y: scene.umap_coords[1],
-      description: scene.description,
-      location: scene.location,
-      thumbnail_url: `${API_URL}/static/scenes/${scene.image_path.replace(/\\/g, '/')}`,
-      metadata: scene.metadata,
-    }));
+    // バックエンドは既にUMAPPoint形式で返しているのでそのまま使用
+    umapDataCache = await response.json();
 
     return umapDataCache;
   } catch (error) {

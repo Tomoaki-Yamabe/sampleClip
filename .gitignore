@@ -18,6 +18,9 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
+
+# Allow frontend lib directory
+!integ-app/frontend/src/lib/
 *.egg
 
 # Virtual Environment
@@ -77,3 +80,5 @@ cdk.out/
 EMERGENCY_STEPS.md
 SECURITY_CLEANUP_REPORT.md
 .kiro/settings/mcp.json
+*.jpg
+*.onnx*

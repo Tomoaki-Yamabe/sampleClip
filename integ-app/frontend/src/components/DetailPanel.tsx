@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { UMAPPoint } from '@/types';
-import Image from 'next/image';
 
 interface DetailPanelProps {
   point: UMAPPoint | null;
@@ -40,12 +39,10 @@ export default function DetailPanel({ point, onClose }: DetailPanelProps) {
 
         <div className="p-6 space-y-4">
           <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden">
-            <Image
+            <img
               src={point.thumbnail_url}
               alt={point.scene_id}
-              fill
-              className="object-contain"
-              unoptimized
+              className="w-full h-full object-contain"
             />
           </div>
 
