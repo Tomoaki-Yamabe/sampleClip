@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
@@ -8,6 +9,8 @@ import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integratio
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export class NuScenesSearchStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -95,6 +98,39 @@ export class NuScenesSearchStack extends cdk.Stack {
     }));
 
     // ========================================
+    // S3 Bucket Deployment: Models and Data
+    // ========================================
+    // Deploy ONNX models to S3
+    const modelsDeployment = new s3deploy.BucketDeployment(this, 'ModelsDeployment', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../../../lambda/models'))],
+      destinationBucket: dataBucket,
+      destinationKeyPrefix: 'models/',
+      prune: false, // Don't delete existing files
+    });
+
+    // Deploy vector database and metadata
+    const dataDeployment = new s3deploy.BucketDeployment(this, 'DataDeployment', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../../../integ-app/backend/app/model'), {
+        exclude: ['*.pt'], // Exclude PyTorch models, only deploy JSON files
+      })],
+      destinationBucket: dataBucket,
+      destinationKeyPrefix: 'data/',
+      prune: false,
+    });
+
+    // Deploy scene images
+    const imagesDeployment = new s3deploy.BucketDeployment(this, 'ImagesDeployment', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../../../data_preparation/extracted_data/images'))],
+      destinationBucket: dataBucket,
+      destinationKeyPrefix: 'images/',
+      prune: false,
+    });
+
+    // Lambda function depends on data being deployed
+    searchFunction.node.addDependency(modelsDeployment);
+    searchFunction.node.addDependency(dataDeployment);
+
+    // ========================================
     // API Gateway HTTP API
     // ========================================
     const httpApi = new apigateway.HttpApi(this, 'HttpApi', {
@@ -143,6 +179,28 @@ export class NuScenesSearchStack extends cdk.Stack {
     // Grant CloudFront read access to frontend bucket
     frontendBucket.grantRead(originAccessIdentity);
 
+    // ========================================
+    // Frontend Deployment
+    // ========================================
+    // Note: Frontend must be built before CDK deployment
+    // Run: cd integ-app/frontend && API_URL=<api-url> node build-for-cdk.js
+    // The 'out' directory will be deployed to S3
+    const frontendPath = path.join(__dirname, '../../../integ-app/frontend/out');
+    
+    let frontendDeployment;
+    if (fs.existsSync(frontendPath)) {
+      frontendDeployment = new s3deploy.BucketDeployment(this, 'FrontendDeployment', {
+        sources: [s3deploy.Source.asset(frontendPath)],
+        destinationBucket: frontendBucket,
+        // distribution: distribution, // Will be set after distribution is created
+        // distributionPaths: ['/*'], // Invalidate all paths
+      });
+      console.log('✓ Frontend deployment configured');
+    } else {
+      console.warn('⚠ Frontend build not found at:', frontendPath);
+      console.warn('  Run: cd integ-app/frontend && API_URL=<api-url> node build-for-cdk.js');
+    }
+
     // CloudFront Distribution
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: 'nuScenes Search Frontend',
@@ -178,6 +236,16 @@ export class NuScenesSearchStack extends cdk.Stack {
         },
       ],
     });
+
+    // Configure CloudFront invalidation for frontend deployment
+    if (frontendDeployment) {
+      frontendDeployment.node.addDependency(distribution);
+      // Note: BucketDeployment automatically invalidates CloudFront when distribution is provided
+      // But we need to set it after distribution is created
+      const cfnDeployment = frontendDeployment.node.defaultChild as cdk.CfnResource;
+      cfnDeployment.addPropertyOverride('DistributionId', distribution.distributionId);
+      cfnDeployment.addPropertyOverride('DistributionPaths', ['/*']);
+    }
 
     // ========================================
     // Outputs
