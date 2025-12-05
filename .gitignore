@@ -76,3 +76,4 @@ cdk.out/
 # Security - 機密情報を含む可能性のあるファイル
 EMERGENCY_STEPS.md
 SECURITY_CLEANUP_REPORT.md
+.kiro/settings/mcp.json
