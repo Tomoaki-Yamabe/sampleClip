@@ -21,8 +21,9 @@ class TextEncoder(nn.Module):
     def __init__(self, projector_path: str | None = None, device: torch.device = DEVICE):
         super().__init__()
         self.device = device
-        self.tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME)
-        self.model = AutoModel.from_pretrained(TEXT_MODEL_NAME).to(device)
+        # Use local_files_only to avoid downloading from Hugging Face
+        self.tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_NAME, local_files_only=True)
+        self.model = AutoModel.from_pretrained(TEXT_MODEL_NAME, local_files_only=True).to(device)
         hidden = self.model.config.hidden_size
         self.projector = nn.Linear(hidden, EMBED_DIM).to(device)
 

@@ -5,19 +5,20 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      args:
-        - HTTP_PROXY=${HTTP_PROXY}
-        - HTTPS_PROXY=${HTTPS_PROXY}
-        - NO_PROXY=${NO_PROXY}
     container_name: fastapi-backend
-    ports:
-      - "8000:8000"
+    # Use host network to avoid DNS/proxy issues
+    network_mode: "host"
     volumes:
       - ./backend/app:/app/app
       - ./backend/app/model:/app/app/model
       - ./data/memes:/app/app/static/memes
+      # Mount Hugging Face cache from host to container
+      - ~/.cache/huggingface:/root/.cache/huggingface:ro
     environment:
       - MODEL_DIR=/app/app/model
+      # Use transformers offline mode
+      - TRANSFORMERS_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     deploy:
       resources:
@@ -32,13 +33,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - HTTP_PROXY=${HTTP_PROXY}
-        - HTTPS_PROXY=${HTTPS_PROXY}
-        - NO_PROXY=${NO_PROXY}
     container_name: nextjs-frontend
-    ports:
-      - "3000:3000"
+    # Use host network to avoid DNS/proxy issues
+    network_mode: "host"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NODE_ENV=development
