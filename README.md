@@ -1,87 +1,136 @@
-# MINI CLIP Image Search 🔍
+# nuScenes Multimodal Search 🚗🔍
 
-AI-Powered Multimodal Image Search Application using MINI CLIP (text-to-image and image-to-image)
+AI-Powered Multimodal Search System for Autonomous Driving Scenes using nuScenes Dataset
 
 ## 🌟 Features
 
-- **Text-to-Image Search**: Find memes using natural language queries
-- **Image-to-Image Search**: Upload an image to find similar memes
+- **Text-to-Scene Search**: Find driving scenes using natural language queries (e.g., "rainy intersection")
+- **Image-to-Scene Search**: Upload an image to find visually similar driving scenarios
+- **UMAP Visualization**: Interactive 2D visualization of scene embeddings
 - **AI-Powered**: Uses MINI CLIP model with MobileNetV3 and multilingual BERT
-- **Modern UI**: Responsive design inspired by Unsplash and Pinterest
-- **Real-time Search**: Fast vector similarity search
-- **GPU Accelerated**: CUDA support for faster inference
+- **AWS Serverless**: Deployed on AWS Lambda, API Gateway, S3, and CloudFront
+- **ONNX Optimized**: Fast inference with ONNX Runtime
+- **Low Cost**: Serverless architecture with estimated $5-10/month cost
 
 ## 🏗️ Architecture
 
-### Backend (FastAPI)
-- **Text Encoder**: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
-- **Image Encoder**: MobileNetV3-Small with custom projection head
+### Backend (AWS Lambda + FastAPI)
+- **Text Encoder**: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (ONNX)
+- **Image Encoder**: MobileNetV3-Small with custom projection head (ONNX)
 - **Embedding Dimension**: 256
-- **Vector Database**: Simple in-memory vector store with 1000 meme items
-- **Static File Serving**: Serves meme images via `/static` endpoint
+- **Vector Database**: S3-based JSON vector store (with S3 Vectors migration path)
+- **Runtime**: AWS Lambda with Docker container
+- **API**: API Gateway HTTP API
 
-### Frontend (Next.js 15)
-- **Framework**: Next.js 15.5.4 with React 19
+### Frontend (Next.js 15 + CloudFront)
+- **Framework**: Next.js 15 with React 19
 - **Styling**: Tailwind CSS 4
-- **Image Handling**: Next.js Image optimization
-- **API Communication**: Native Fetch API
+- **Deployment**: Static export to S3 + CloudFront CDN
+- **Visualization**: Plotly.js for UMAP scatter plots
+
+### Infrastructure (AWS CDK)
+- **IaC**: AWS CDK (TypeScript)
+- **Compute**: Lambda (512MB, 30s timeout)
+- **Storage**: S3 (models, data, images, frontend)
+- **CDN**: CloudFront
+- **Monitoring**: CloudWatch Logs (7-day retention)
 
 ## 📁 Project Structure
 
 ```
-integ-app/
-├── backend/
-│   ├── app/
-│   │   ├── encoders.py          # Text & Image encoders
-│   │   ├── vector_db.py         # Vector database implementation
-│   │   ├── predict.py           # API endpoints
-│   │   ├── main.py              # FastAPI application
-│   │   ├── model/               # Pre-trained models
-│   │   │   ├── text_projector.pt
-│   │   │   ├── image_projector.pt
-│   │   │   └── vector_db.json
-│   │   └── static/              # Meme images
-│   │       └── memes/
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   └── app/
-│   │       └── page.tsx         # Main UI component
-│   ├── Dockerfile
+.
+├── lambda/                      # AWS Lambda function
+│   ├── lambda_function.py       # Lambda handler
+│   ├── encoders.py              # PyTorch encoders
+│   ├── encoders_onnx.py         # ONNX encoders (optimized)
+│   ├── vector_db.py             # Vector database
+│   ├── vector_db_s3vectors.py   # S3 Vectors integration
+│   ├── Dockerfile               # Lambda container
+│   ├── requirements.txt
+│   └── models/                  # ONNX models (generated)
+│       ├── text_transformer.onnx
+│       ├── text_projector.onnx
+│       ├── image_features.onnx
+│       └── image_projector.onnx
+├── infrastructure/cdk/          # AWS CDK infrastructure
+│   ├── lib/
+│   │   └── nuscenes-search-stack.ts
+│   ├── bin/
+│   │   └── app.ts
 │   └── package.json
-└── docker-compose.yml
+├── integ-app/                   # Local development
+│   ├── backend/                 # FastAPI backend
+│   │   └── app/
+│   │       ├── encoders.py
+│   │       ├── main.py
+│   │       └── model/           # PyTorch models & data
+│   └── frontend/                # Next.js frontend
+│       ├── src/
+│       │   ├── app/
+│       │   ├── components/
+│       │   └── lib/
+│       └── package.json
+├── data_preparation/            # Data processing scripts
+│   ├── extract_nuscenes.py
+│   ├── generate_embeddings.py
+│   ├── generate_umap.py
+│   ├── convert_to_onnx.py       # PyTorch → ONNX conversion
+│   ├── upload_to_s3.py
+│   └── extracted_data/
+│       └── images/              # Scene images
+├── deploy.sh                    # Deployment script (Linux/Mac)
+├── deploy.ps1                   # Deployment script (Windows)
+└── DEPLOYMENT_INSTRUCTIONS.md   # Detailed deployment guide
 ```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- NVIDIA GPU (optional, for GPU acceleration)
-- Meme dataset (should be placed in `backend/app/static/memes/`)
+- **AWS Account** with configured credentials
+- **AWS CLI** installed and configured
+- **AWS CDK** installed (`npm install -g aws-cdk`)
+- **Node.js 18+**
+- **Python 3.11+** with `uv/uvx`
+- **Docker** (for Lambda container builds)
 
-### Installation
+### Quick Start (Local Development)
 
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd integ-app
+   cd sampleClip
    ```
 
-2. **Place meme images**
-   - Ensure meme images are in `backend/app/static/memes/memes/memes/`
-   - The directory structure should match the paths in `vector_db.json`
-
-3. **Start the application**
+2. **Start local development environment**
    ```bash
+   cd integ-app
    docker-compose up --build
    ```
 
-4. **Access the application**
+3. **Access the application**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
+
+### AWS Deployment
+
+See [DEPLOYMENT_INSTRUCTIONS.md](DEPLOYMENT_INSTRUCTIONS.md) for detailed deployment guide.
+
+**Quick Deploy:**
+```bash
+# Linux/Mac
+./deploy.sh
+
+# Windows
+.\deploy.ps1
+```
+
+This will:
+1. Convert PyTorch models to ONNX
+2. Deploy CDK infrastructure
+3. Build and deploy frontend
+4. Configure CloudFront CDN
 
 ## 🔧 Configuration
 
@@ -192,6 +241,7 @@ npm run dev
 - Hidden Size: 384
 - Projection: Linear(384 → 256)
 - Normalization: L2 normalized embeddings
+- Format: ONNX (optimized for Lambda)
 
 ### Image Encoder
 - Base Model: MobileNetV3-Small
@@ -199,11 +249,18 @@ npm run dev
 - Projection: Linear(576 → 256)
 - Normalization: L2 normalized embeddings
 - Input Size: 224×224
+- Format: ONNX (optimized for Lambda)
+
+### Dataset
+- Source: nuScenes Mini (10 scenes)
+- Images: Front camera views (512×512)
+- Metadata: Scene descriptions, locations, timestamps
+- UMAP: 2D coordinates for visualization
 
 ### Training
 - Loss: CLIP-style contrastive loss
 - Optimizer: AdamW
-- Dataset: Meme dataset with text descriptions
+- Dataset: nuScenes with scene descriptions
 
 ## 🔍 Vector Search
 
@@ -215,10 +272,24 @@ similarity = dot(query_vec, item_vec) / (norm(query_vec) * norm(item_vec))
 
 Results are sorted by similarity score (0-1, higher is better).
 
-## 🐳 Docker Deployment
+## 💰 Cost Estimation
+
+Monthly cost for AWS deployment (low traffic):
+
+| Service | Cost |
+|---------|------|
+| Lambda | $0-5 (free tier) |
+| API Gateway | $0-3 |
+| S3 | $1-2 |
+| CloudFront | $0-2 |
+| ECR | $0-1 |
+| **Total** | **$5-10/month** |
+
+## 🐳 Local Development
 
 ### Build Images
 ```bash
+cd integ-app
 docker-compose build
 ```
 
@@ -241,13 +312,35 @@ docker-compose logs -f
 
 This project is for educational purposes.
 
+## 🗺️ Roadmap
+
+- [x] Basic text and image search
+- [x] UMAP visualization
+- [x] AWS serverless deployment
+- [x] ONNX optimization
+- [ ] S3 Vectors (GA) migration
+- [ ] More nuScenes scenes (50-100)
+- [ ] MCAP time-series data integration
+- [ ] Custom domain with Route 53
+- [ ] Authentication with Cognito
+- [ ] Real-time monitoring dashboard
+
 ## 🙏 Acknowledgments
 
+- [nuScenes Dataset](https://www.nuscenes.org/) by Motional
 - CLIP paper by OpenAI
 - Hugging Face Transformers
-- PyTorch team
-- Next.js team
+- PyTorch and ONNX Runtime teams
+- AWS CDK team
+- Next.js and React teams
 - FastAPI team
+
+## 📚 Documentation
+
+- [Deployment Instructions](DEPLOYMENT_INSTRUCTIONS.md)
+- [S3 Vectors Migration Guide](S3_VECTORS_MIGRATION.md)
+- [Security Best Practices](SECURITY_BEST_PRACTICES.md)
+- [CDK Quick Start](infrastructure/cdk/QUICKSTART.md)
 
 ## 🤝 Contributing
 
